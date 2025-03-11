@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DateRangePicker } from "@/components/DateRangePicker";
@@ -22,14 +22,30 @@ interface Trip {
 
 export default function TripDetails() {
   const params = useParams();
+  const router = useRouter();
   const [trip, setTrip] = useState<Trip | null>(null);
   const [activeTab, setActiveTab] = useState("overview");
   const [flightDate, setFlightDate] = useState<DateRange | undefined>();
   const [isSearching, setIsSearching] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedTrip, setEditedTrip] = useState<Trip | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [dateRange, setDateRange] = useState<DateRange | undefined>();
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     fetchTripDetails();
   }, []);
+
+  useEffect(() => {
+    if (trip) {
+      setDateRange({
+        from: new Date(trip.startDate),
+        to: new Date(trip.endDate),
+      });
+      setEditedTrip(trip);
+    }
+  }, [trip]);
 
   const fetchTripDetails = async () => {
     try {
@@ -47,6 +63,38 @@ export default function TripDetails() {
     }
   };
 
+  const handleSave = async () => {
+    if (!editedTrip || !dateRange?.from || !dateRange?.to) return;
+
+    setIsSaving(true);
+    try {
+      const response = await fetch(`/api/trips/${params.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ...editedTrip,
+          startDate: dateRange.from,
+          endDate: dateRange.to,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update trip');
+      }
+
+      const updatedTrip = await response.json();
+      setTrip(updatedTrip);
+      setIsEditing(false);
+    } catch (error) {
+      console.error('Failed to update trip:', error);
+      alert('Failed to update trip. Please try again.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleFlightSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSearching(true);
@@ -61,25 +109,119 @@ export default function TripDetails() {
     }
   };
 
-  if (!trip) {
+  const handleDelete = async () => {
+    if (!confirm("Are you sure you want to delete this trip? This action cannot be undone.")) {
+      return;
+    }
+
+    setIsDeleting(true);
+    try {
+      const response = await fetch(`/api/trips/${params.id}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to delete trip');
+      }
+
+      router.push('/trips');
+    } catch (error) {
+      console.error('Failed to delete trip:', error);
+      alert('Failed to delete trip. Please try again.');
+      setIsDeleting(false);
+    }
+  };
+
+  if (!trip || !editedTrip) {
     return <div>Loading...</div>;
   }
 
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold mb-2">{trip.title}</h1>
-        <div className="flex items-center text-gray-600 space-x-4">
-          <span>{trip.departure} → {trip.destination}</span>
-          <span>•</span>
-          <span>{new Date(trip.startDate).toLocaleDateString()} - {new Date(trip.endDate).toLocaleDateString()}</span>
-          {trip.budget && (
-            <>
+        {isEditing ? (
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Trip Name
+              </label>
+              <Input
+                value={editedTrip.title}
+                onChange={(e) => setEditedTrip({ ...editedTrip, title: e.target.value })}
+                className="text-3xl font-bold"
+              />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Departure City
+                </label>
+                <Input
+                  value={editedTrip.departure}
+                  onChange={(e) => setEditedTrip({ ...editedTrip, departure: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Destination City
+                </label>
+                <Input
+                  value={editedTrip.destination}
+                  onChange={(e) => setEditedTrip({ ...editedTrip, destination: e.target.value })}
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Trip Dates
+              </label>
+              <DateRangePicker
+                date={dateRange}
+                onDateChange={setDateRange}
+              />
+            </div>
+            <div className="flex space-x-2">
+              <Button onClick={handleSave} disabled={isSaving}>
+                {isSaving ? "Saving..." : "Save Changes"}
+              </Button>
+              <Button variant="outline" onClick={() => {
+                setEditedTrip(trip);
+                setIsEditing(false);
+              }}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="flex justify-between items-start mb-4">
+              <h1 className="text-3xl font-bold">{trip.title}</h1>
+              <div className="flex space-x-2">
+                <Button variant="outline" onClick={() => setIsEditing(true)}>
+                  Edit Trip
+                </Button>
+                <Button 
+                  variant="destructive" 
+                  onClick={handleDelete}
+                  disabled={isDeleting}
+                >
+                  {isDeleting ? "Deleting..." : "Delete Trip"}
+                </Button>
+              </div>
+            </div>
+            <div className="flex items-center text-gray-600 space-x-4">
+              <span>{trip.departure} → {trip.destination}</span>
               <span>•</span>
-              <span>Budget: ${trip.budget.toLocaleString()}</span>
-            </>
-          )}
-        </div>
+              <span>{new Date(trip.startDate).toLocaleDateString()} - {new Date(trip.endDate).toLocaleDateString()}</span>
+              {trip.budget && (
+                <>
+                  <span>•</span>
+                  <span>Budget: ${trip.budget.toLocaleString()}</span>
+                </>
+              )}
+            </div>
+          </>
+        )}
       </div>
 
       {/* Navigation Tabs */}

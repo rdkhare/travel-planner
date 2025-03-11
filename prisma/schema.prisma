@@ -54,7 +54,7 @@ model User {
 
 model Trip {
   id              String          @id @default(cuid())
-  title           String
+  title           String          // This is the trip name
   startDate       DateTime
   endDate         DateTime
   budget          Float?

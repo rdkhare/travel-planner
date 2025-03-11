@@ -46,18 +46,18 @@ export async function POST(request: Request) {
     const json = await request.json();
     const trip = await prisma.trip.create({
       data: {
-        title: json.title,
+        title: json.name,
         startDate: new Date(json.startDate),
         endDate: new Date(json.endDate),
-        budget: json.budget ? parseFloat(json.budget) : null,
-        destination: json.destination,
-        departure: json.departure,
+        departure: json.departureCity,
+        destination: json.destinationCity,
         userId: session.user.id,
       },
     });
 
     return NextResponse.json(trip);
   } catch (error) {
+    console.error("Error creating trip:", error);
     return NextResponse.json(
       { error: "Failed to create trip" },
       { status: 500 }

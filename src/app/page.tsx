@@ -1,9 +1,119 @@
+"use client";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Calendar } from "@/components/ui/calendar";
 import Link from "next/link";
+import { DateRangePicker } from "@/components/DateRangePicker";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
+import { useForm } from "react-hook-form";
+import { DateRange } from "react-day-picker";
+import { useSession, signIn } from "next-auth/react";
+
+type SearchFormData = {
+  from: string;
+  to: string;
+  tripName: string;
+};
 
 export default function Home() {
+  const [date, setDate] = useState<DateRange | undefined>();
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [searchData, setSearchData] = useState<Partial<SearchFormData>>();
+  const router = useRouter();
+  const { data: session } = useSession();
+  
+  const { register, handleSubmit } = useForm<SearchFormData>();
+
+  const onSubmit = async (data: SearchFormData) => {
+    if (!date?.from || !date?.to) {
+      alert("Please select travel dates");
+      return;
+    }
+
+    if (!session) {
+      // Store the form data in sessionStorage before redirecting
+      sessionStorage.setItem('pendingTripData', JSON.stringify({
+        ...data,
+        startDate: date.from,
+        endDate: date.to
+      }));
+      signIn(undefined, { callbackUrl: window.location.href });
+      return;
+    }
+
+    setSearchData(data);
+    setIsDialogOpen(true);
+  };
+
+  const createTrip = async (tripName: string) => {
+    if (!session) {
+      sessionStorage.setItem('pendingTripData', JSON.stringify({
+        name: tripName,
+        startDate: date?.from,
+        endDate: date?.to,
+        departureCity: searchData?.from,
+        destinationCity: searchData?.to
+      }));
+      signIn(undefined, { callbackUrl: window.location.href });
+      return;
+    }
+
+    try {
+      const response = await fetch("/api/trips", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: tripName,
+          startDate: date?.from,
+          endDate: date?.to,
+          departureCity: searchData?.from,
+          destinationCity: searchData?.to,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to create trip");
+      }
+
+      const trip = await response.json();
+      router.push(`/trips/${trip.id}`);
+    } catch (error) {
+      console.error("Error creating trip:", error);
+      alert("Failed to create trip. Please try again.");
+    }
+  };
+
+  // Check for pending trip data after sign-in
+  useEffect(() => {
+    if (session) {
+      const pendingData = sessionStorage.getItem('pendingTripData');
+      if (pendingData) {
+        const data = JSON.parse(pendingData);
+        sessionStorage.removeItem('pendingTripData');
+        if (data.name) {
+          // If we have a name, create the trip directly
+          createTrip(data.name);
+        } else {
+          // Otherwise, set the form data and open the dialog
+          setDate({
+            from: new Date(data.startDate),
+            to: new Date(data.endDate)
+          });
+          setSearchData({
+            from: data.from,
+            to: data.to
+          });
+          setIsDialogOpen(true);
+        }
+      }
+    }
+  }, [session]);
+
   return (
     <main className="flex min-h-screen flex-col items-center">
       {/* Hero Section */}
@@ -20,42 +130,46 @@ export default function Home() {
 
           {/* Search Box */}
           <div className="max-w-4xl mx-auto bg-white rounded-lg shadow-xl p-6 mt-8">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div className="col-span-1">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  From
-                </label>
-                <Input
-                  type="text"
-                  placeholder="Departure City"
-                  className="w-full"
-                />
+            <form onSubmit={handleSubmit(onSubmit)}>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="col-span-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    From
+                  </label>
+                  <Input
+                    {...register("from", { required: true })}
+                    type="text"
+                    placeholder="Departure City"
+                    className="w-full"
+                  />
+                </div>
+                <div className="col-span-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    To
+                  </label>
+                  <Input
+                    {...register("to", { required: true })}
+                    type="text"
+                    placeholder="Destination City"
+                    className="w-full"
+                  />
+                </div>
+                <div className="col-span-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Dates
+                  </label>
+                  <DateRangePicker date={date} onDateChange={setDate} />
+                </div>
+                <div className="col-span-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    &nbsp;
+                  </label>
+                  <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700">
+                    Search
+                  </Button>
+                </div>
               </div>
-              <div className="col-span-1">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  To
-                </label>
-                <Input
-                  type="text"
-                  placeholder="Destination City"
-                  className="w-full"
-                />
-              </div>
-              <div className="col-span-1">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Dates
-                </label>
-                <Input type="date" className="w-full" />
-              </div>
-              <div className="col-span-1">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  &nbsp;
-                </label>
-                <Button className="w-full bg-blue-600 hover:bg-blue-700">
-                  Search
-                </Button>
-              </div>
-            </div>
+            </form>
           </div>
         </div>
       </section>
@@ -130,6 +244,35 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      {/* Trip Name Dialog */}
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Name Your Trip</DialogTitle>
+            <DialogDescription>
+              Give your trip a name to help you identify it later.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={(e) => {
+            e.preventDefault();
+            const formData = new FormData(e.currentTarget);
+            const tripName = formData.get("tripName") as string;
+            if (tripName) {
+              createTrip(tripName);
+            }
+          }}>
+            <div className="grid gap-4 py-4">
+              <Input
+                name="tripName"
+                placeholder="e.g., Summer Vacation 2024"
+                required
+              />
+              <Button type="submit">Create Trip</Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </main>
   );
 }

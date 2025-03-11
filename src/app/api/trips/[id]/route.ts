@@ -8,8 +8,9 @@ const prisma = new PrismaClient();
 // GET /api/trips/[id] - Get a specific trip
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  context: { params: { id: string } }
 ) {
+  const params = await context.params;
   const session = await getServerSession(authOptions);
 
   if (!session?.user) {
@@ -49,8 +50,9 @@ export async function GET(
 // PUT /api/trips/[id] - Update a trip
 export async function PUT(
   request: Request,
-  { params }: { params: { id: string } }
+  context: { params: { id: string } }
 ) {
+  const params = await context.params;
   const session = await getServerSession(authOptions);
 
   if (!session?.user) {
@@ -85,8 +87,9 @@ export async function PUT(
 // DELETE /api/trips/[id] - Delete a trip
 export async function DELETE(
   request: Request,
-  { params }: { params: { id: string } }
+  context: { params: { id: string } }
 ) {
+  const params = await context.params;
   const session = await getServerSession(authOptions);
 
   if (!session?.user) {

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import { Plus } from "lucide-react";
 
 interface Trip {
   id: string;
@@ -84,110 +85,56 @@ export default function TripsPage() {
   };
 
   if (status === "loading" || isLoading) {
-    return <div>Loading...</div>;
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="text-center">Loading...</div>
+      </div>
+    );
   }
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <h1 className="text-3xl font-bold mb-8">My Trips</h1>
-
-      {/* Create Trip Form */}
-      <div className="bg-white rounded-lg shadow-md p-6 mb-8">
-        <h2 className="text-xl font-semibold mb-4">Create New Trip</h2>
-        <form onSubmit={handleCreateTrip} className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Input
-              type="text"
-              placeholder="Trip Title"
-              value={newTrip.title}
-              onChange={(e) =>
-                setNewTrip({ ...newTrip, title: e.target.value })
-              }
-              required
-            />
-            <Input
-              type="text"
-              placeholder="Destination"
-              value={newTrip.destination}
-              onChange={(e) =>
-                setNewTrip({ ...newTrip, destination: e.target.value })
-              }
-              required
-            />
-            <Input
-              type="text"
-              placeholder="Departure City"
-              value={newTrip.departure}
-              onChange={(e) =>
-                setNewTrip({ ...newTrip, departure: e.target.value })
-              }
-              required
-            />
-            <Input
-              type="number"
-              placeholder="Budget"
-              value={newTrip.budget}
-              onChange={(e) =>
-                setNewTrip({ ...newTrip, budget: e.target.value })
-              }
-            />
-            <Input
-              type="date"
-              value={newTrip.startDate}
-              onChange={(e) =>
-                setNewTrip({ ...newTrip, startDate: e.target.value })
-              }
-              required
-            />
-            <Input
-              type="date"
-              value={newTrip.endDate}
-              onChange={(e) =>
-                setNewTrip({ ...newTrip, endDate: e.target.value })
-              }
-              required
-            />
-          </div>
-          <Button
-            type="submit"
-            className="w-full md:w-auto"
-            disabled={isCreating}
+      <div className="flex justify-between items-center mb-8">
+        <h1 className="text-3xl font-bold">My Trips</h1>
+        <div className="relative">
+          <Button 
+            onClick={() => router.push('/trips/new')}
+            variant="outline"
+            className="group relative h-12 w-12 rounded-full bg-white hover:bg-white hover:w-[180px] transition-all duration-300 ease-in-out overflow-hidden border border-gray-200 hover:border-gray-300 shadow-md hover:shadow-lg"
           >
-            {isCreating ? "Creating..." : "Create Trip"}
+            <span className="absolute right-0 top-0 h-full w-12 flex items-center justify-center text-black transition-all duration-300 group-hover:right-auto group-hover:left-0">
+              <Plus className="h-6 w-6" />
+            </span>
+            <span className="absolute right-4 opacity-0 group-hover:opacity-100 transition-all duration-300 whitespace-nowrap text-black">
+              Create New Trip
+            </span>
           </Button>
-        </form>
+        </div>
       </div>
 
-      {/* Trips List */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {trips.map((trip) => (
-          <div
-            key={trip.id}
-            className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow"
-          >
-            <h3 className="text-xl font-semibold mb-2">{trip.title}</h3>
-            <p className="text-gray-600 mb-2">
-              {trip.departure} → {trip.destination}
-            </p>
-            <p className="text-gray-600 mb-2">
-              {new Date(trip.startDate).toLocaleDateString()} -{" "}
-              {new Date(trip.endDate).toLocaleDateString()}
-            </p>
-            {trip.budget && (
-              <p className="text-gray-600">
-                Budget: ${trip.budget.toLocaleString()}
-              </p>
-            )}
-            <Button
-              variant="outline"
-              className="mt-4"
+      {trips.length === 0 ? (
+        <div className="text-center py-12">
+          <h2 className="text-xl text-gray-600">No Trips Made</h2>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {trips.map((trip) => (
+            <div
+              key={trip.id}
+              className="bg-white rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition-shadow"
               onClick={() => router.push(`/trips/${trip.id}`)}
             >
-              View Details
-            </Button>
-          </div>
-        ))}
-      </div>
+              <h2 className="text-xl font-semibold mb-2">{trip.title}</h2>
+              <div className="text-gray-600">
+                <p>{trip.departure} → {trip.destination}</p>
+                <p className="mt-2">
+                  {new Date(trip.startDate).toLocaleDateString()} - {new Date(trip.endDate).toLocaleDateString()}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 } 
