@@ -1,14 +1,15 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import { AuthProvider } from "@/components/providers/AuthProvider";
 import { Navbar } from "@/components/Navbar";
+import { Providers } from "@/components/Providers";
+import GoogleMapsScript from "@/components/GoogleMapsScript";
 
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "Travel Planner",
-  description: "Plan your perfect trip with AI-powered recommendations",
+  description: "Plan your trips with ease",
 };
 
 export default function RootLayout({
@@ -18,11 +19,14 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
+      <head>
+        <GoogleMapsScript />
+      </head>
       <body className={inter.className}>
-        <AuthProvider>
+        <Providers>
           <Navbar />
           {children}
-        </AuthProvider>
+        </Providers>
       </body>
     </html>
   );

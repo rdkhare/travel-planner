@@ -11,6 +11,7 @@ import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { DateRange } from "react-day-picker";
 import { useSession, signIn } from "next-auth/react";
+import PlaceAutocomplete from "@/components/PlaceAutocomplete";
 
 type SearchFormData = {
   from: string;
@@ -21,30 +22,44 @@ type SearchFormData = {
 export default function Home() {
   const [date, setDate] = useState<DateRange | undefined>();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [searchData, setSearchData] = useState<Partial<SearchFormData>>();
+  const [searchData, setSearchData] = useState<{
+    from: string;
+    fromId: string;
+    to: string;
+    toId: string;
+  }>({
+    from: "",
+    fromId: "",
+    to: "",
+    toId: "",
+  });
   const router = useRouter();
   const { data: session } = useSession();
-  
-  const { register, handleSubmit } = useForm<SearchFormData>();
 
-  const onSubmit = async (data: SearchFormData) => {
+  const handleSearch = async (e: React.FormEvent) => {
+    e.preventDefault();
     if (!date?.from || !date?.to) {
       alert("Please select travel dates");
+      return;
+    }
+
+    if (!searchData.from || !searchData.to) {
+      alert("Please select both departure and destination cities");
       return;
     }
 
     if (!session) {
       // Store the form data in sessionStorage before redirecting
       sessionStorage.setItem('pendingTripData', JSON.stringify({
-        ...data,
         startDate: date.from,
-        endDate: date.to
+        endDate: date.to,
+        departureCity: searchData.from,
+        destinationCity: searchData.to
       }));
       signIn(undefined, { callbackUrl: window.location.href });
       return;
     }
 
-    setSearchData(data);
     setIsDialogOpen(true);
   };
 
@@ -54,8 +69,8 @@ export default function Home() {
         name: tripName,
         startDate: date?.from,
         endDate: date?.to,
-        departureCity: searchData?.from,
-        destinationCity: searchData?.to
+        departureCity: searchData.from,
+        destinationCity: searchData.to
       }));
       signIn(undefined, { callbackUrl: window.location.href });
       return;
@@ -71,8 +86,8 @@ export default function Home() {
           name: tripName,
           startDate: date?.from,
           endDate: date?.to,
-          departureCity: searchData?.from,
-          destinationCity: searchData?.to,
+          departureCity: searchData.from,
+          destinationCity: searchData.to,
         }),
       });
 
@@ -105,8 +120,10 @@ export default function Home() {
             to: new Date(data.endDate)
           });
           setSearchData({
-            from: data.from,
-            to: data.to
+            from: data.departureCity,
+            fromId: "",
+            to: data.destinationCity,
+            toId: "",
           });
           setIsDialogOpen(true);
         }
@@ -130,28 +147,36 @@ export default function Home() {
 
           {/* Search Box */}
           <div className="max-w-4xl mx-auto bg-white rounded-lg shadow-xl p-6 mt-8">
-            <form onSubmit={handleSubmit(onSubmit)}>
+            <form onSubmit={handleSearch}>
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div className="col-span-1">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     From
                   </label>
-                  <Input
-                    {...register("from", { required: true })}
-                    type="text"
+                  <PlaceAutocomplete
                     placeholder="Departure City"
-                    className="w-full"
+                    onPlaceSelect={(place) => 
+                      setSearchData({ 
+                        ...searchData, 
+                        from: place.name,
+                        fromId: place.placeId
+                      })
+                    }
                   />
                 </div>
                 <div className="col-span-1">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     To
                   </label>
-                  <Input
-                    {...register("to", { required: true })}
-                    type="text"
+                  <PlaceAutocomplete
                     placeholder="Destination City"
-                    className="w-full"
+                    onPlaceSelect={(place) => 
+                      setSearchData({ 
+                        ...searchData, 
+                        to: place.name,
+                        toId: place.placeId
+                      })
+                    }
                   />
                 </div>
                 <div className="col-span-1">

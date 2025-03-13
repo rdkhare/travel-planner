@@ -100,7 +100,7 @@ export default function TripsPage() {
           <Button 
             onClick={() => router.push('/trips/new')}
             variant="outline"
-            className="group relative h-12 w-12 rounded-full bg-white hover:bg-white hover:w-[180px] transition-all duration-300 ease-in-out overflow-hidden border border-gray-200 hover:border-gray-300 shadow-md hover:shadow-lg"
+            className="group relative h-12 w-12 rounded-full bg-white hover:w-[180px] transition-all duration-300 ease-in-out overflow-hidden border border-gray-200 hover:border-gray-300 shadow-md hover:shadow-lg flex items-center justify-center"
           >
             <span className="absolute right-0 top-0 h-full w-12 flex items-center justify-center text-black transition-all duration-300 group-hover:right-auto group-hover:left-0">
               <Plus className="h-6 w-6" />

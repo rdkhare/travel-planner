@@ -46,11 +46,11 @@ export async function POST(request: Request) {
     const json = await request.json();
     const trip = await prisma.trip.create({
       data: {
-        title: json.name,
+        title: json.title || json.name,
         startDate: new Date(json.startDate),
         endDate: new Date(json.endDate),
-        departure: json.departureCity,
-        destination: json.destinationCity,
+        departure: json.departure || json.departureCity,
+        destination: json.destination || json.destinationCity,
         userId: session.user.id,
       },
     });
