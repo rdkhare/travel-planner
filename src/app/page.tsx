@@ -53,54 +53,15 @@ export default function Home() {
       sessionStorage.setItem('pendingTripData', JSON.stringify({
         startDate: date.from,
         endDate: date.to,
-        departureCity: searchData.from,
-        destinationCity: searchData.to
+        departure: searchData.from,
+        destination: searchData.to
       }));
       signIn(undefined, { callbackUrl: window.location.href });
       return;
     }
 
-    setIsDialogOpen(true);
-  };
-
-  const createTrip = async (tripName: string) => {
-    if (!session) {
-      sessionStorage.setItem('pendingTripData', JSON.stringify({
-        name: tripName,
-        startDate: date?.from,
-        endDate: date?.to,
-        departureCity: searchData.from,
-        destinationCity: searchData.to
-      }));
-      signIn(undefined, { callbackUrl: window.location.href });
-      return;
-    }
-
-    try {
-      const response = await fetch("/api/trips", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          name: tripName,
-          startDate: date?.from,
-          endDate: date?.to,
-          departureCity: searchData.from,
-          destinationCity: searchData.to,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to create trip");
-      }
-
-      const trip = await response.json();
-      router.push(`/trips/${trip.id}`);
-    } catch (error) {
-      console.error("Error creating trip:", error);
-      alert("Failed to create trip. Please try again.");
-    }
+    // Redirect to the new trip page with the form data
+    router.push(`/trips/new?from=${encodeURIComponent(searchData.from)}&to=${encodeURIComponent(searchData.to)}&startDate=${date.from.toISOString()}&endDate=${date.to.toISOString()}`);
   };
 
   // Check for pending trip data after sign-in
@@ -110,23 +71,8 @@ export default function Home() {
       if (pendingData) {
         const data = JSON.parse(pendingData);
         sessionStorage.removeItem('pendingTripData');
-        if (data.name) {
-          // If we have a name, create the trip directly
-          createTrip(data.name);
-        } else {
-          // Otherwise, set the form data and open the dialog
-          setDate({
-            from: new Date(data.startDate),
-            to: new Date(data.endDate)
-          });
-          setSearchData({
-            from: data.departureCity,
-            fromId: "",
-            to: data.destinationCity,
-            toId: "",
-          });
-          setIsDialogOpen(true);
-        }
+        // Redirect to the new trip page with the form data
+        router.push(`/trips/new?from=${encodeURIComponent(data.departure)}&to=${encodeURIComponent(data.destination)}&startDate=${new Date(data.startDate).toISOString()}&endDate=${new Date(data.endDate).toISOString()}`);
       }
     }
   }, [session]);
@@ -154,7 +100,7 @@ export default function Home() {
                     From
                   </label>
                   <PlaceAutocomplete
-                    placeholder="Departure City"
+                    placeholder="Departure Airport"
                     onPlaceSelect={(place) => 
                       setSearchData({ 
                         ...searchData, 
@@ -169,7 +115,7 @@ export default function Home() {
                     To
                   </label>
                   <PlaceAutocomplete
-                    placeholder="Destination City"
+                    placeholder="Destination Airport"
                     onPlaceSelect={(place) => 
                       setSearchData({ 
                         ...searchData, 
@@ -269,35 +215,6 @@ export default function Home() {
           </div>
         </div>
       </section>
-
-      {/* Trip Name Dialog */}
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Name Your Trip</DialogTitle>
-            <DialogDescription>
-              Give your trip a name to help you identify it later.
-            </DialogDescription>
-          </DialogHeader>
-          <form onSubmit={(e) => {
-            e.preventDefault();
-            const formData = new FormData(e.currentTarget);
-            const tripName = formData.get("tripName") as string;
-            if (tripName) {
-              createTrip(tripName);
-            }
-          }}>
-            <div className="grid gap-4 py-4">
-              <Input
-                name="tripName"
-                placeholder="e.g., Summer Vacation 2024"
-                required
-              />
-              <Button type="submit">Create Trip</Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
     </main>
   );
 }

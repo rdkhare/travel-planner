@@ -23,7 +23,7 @@ export default function PlaceAutocomplete({
   const [inputValue, setInputValue] = useState(defaultValue);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
+  const autocompleteRef = useRef<InstanceType<typeof google.maps.places.Autocomplete> | null>(null);
 
   useEffect(() => {
     const initializeAutocomplete = () => {
@@ -43,7 +43,7 @@ export default function PlaceAutocomplete({
       try {
         console.log('Creating new Autocomplete instance');
         const autocomplete = new window.google.maps.places.Autocomplete(inputRef.current, {
-          types: ['(cities)'],
+          types: ['airport'],
           fields: ['name', 'place_id']
         });
 

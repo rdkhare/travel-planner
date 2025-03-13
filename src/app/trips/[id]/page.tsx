@@ -154,7 +154,7 @@ export default function TripDetails() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Departure City
+                  Departure Airport
                 </label>
                 <Input
                   value={editedTrip.departure}
@@ -163,7 +163,7 @@ export default function TripDetails() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Destination City
+                  Destination Airport
                 </label>
                 <Input
                   value={editedTrip.destination}
@@ -349,7 +349,7 @@ export default function TripDetails() {
                   <label className="text-sm font-medium">From</label>
                   <Input
                     type="text"
-                    placeholder="Departure City"
+                    placeholder="Departure Airport"
                     defaultValue={trip.departure}
                   />
                 </div>
@@ -357,7 +357,7 @@ export default function TripDetails() {
                   <label className="text-sm font-medium">To</label>
                   <Input
                     type="text"
-                    placeholder="Destination City"
+                    placeholder="Destination Airport"
                     defaultValue={trip.destination}
                   />
                 </div>

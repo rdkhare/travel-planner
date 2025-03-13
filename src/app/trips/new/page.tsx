@@ -1,15 +1,18 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import PlaceAutocomplete from "@/components/PlaceAutocomplete";
 import { DateRangePicker } from "@/components/DateRangePicker";
 import { DateRange } from "react-day-picker";
+import { useSession } from "next-auth/react";
 
 export default function NewTripPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const { data: session } = useSession();
   const [isCreating, setIsCreating] = useState(false);
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
   const [tripData, setTripData] = useState({
@@ -20,6 +23,27 @@ export default function NewTripPage() {
     destinationId: "",
     budget: "",
   });
+
+  useEffect(() => {
+    // Set initial values from URL parameters if they exist
+    const from = searchParams.get("from");
+    const to = searchParams.get("to");
+    const startDate = searchParams.get("startDate");
+    const endDate = searchParams.get("endDate");
+
+    if (from) {
+      setTripData(prev => ({ ...prev, departure: from }));
+    }
+    if (to) {
+      setTripData(prev => ({ ...prev, destination: to }));
+    }
+    if (startDate && endDate) {
+      setDateRange({
+        from: new Date(startDate),
+        to: new Date(endDate),
+      });
+    }
+  }, [searchParams]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,6 +57,19 @@ export default function NewTripPage() {
       return;
     }
 
+    if (!session) {
+      // Store the form data in sessionStorage before redirecting
+      sessionStorage.setItem('pendingTripData', JSON.stringify({
+        title: tripData.title,
+        startDate: dateRange.from,
+        endDate: dateRange.to,
+        departure: tripData.departure,
+        destination: tripData.destination
+      }));
+      router.push('/auth/signin');
+      return;
+    }
+
     setIsCreating(true);
     try {
       const response = await fetch("/api/trips", {
@@ -41,17 +78,20 @@ export default function NewTripPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          ...tripData,
+          title: tripData.title,
           startDate: dateRange.from,
           endDate: dateRange.to,
+          departure: tripData.departure,
+          destination: tripData.destination,
         }),
       });
 
-      if (response.ok) {
-        router.push("/trips");
-      } else {
+      if (!response.ok) {
         throw new Error("Failed to create trip");
       }
+
+      const trip = await response.json();
+      router.push(`/trips/${trip.id}`);
     } catch (error) {
       console.error("Failed to create trip:", error);
       alert("Failed to create trip. Please try again.");
@@ -88,10 +128,11 @@ export default function NewTripPage() {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Departure City
+              Departure Airport
             </label>
             <PlaceAutocomplete
-              placeholder="Enter departure city"
+              placeholder="Enter departure airport"
+              defaultValue={tripData.departure}
               onPlaceSelect={(place) => 
                 setTripData({ 
                   ...tripData, 
@@ -104,10 +145,11 @@ export default function NewTripPage() {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Destination City
+              Destination Airport
             </label>
             <PlaceAutocomplete
-              placeholder="Enter destination city"
+              placeholder="Enter destination airport"
+              defaultValue={tripData.destination}
               onPlaceSelect={(place) => 
                 setTripData({ 
                   ...tripData, 
