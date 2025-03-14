@@ -20,6 +20,137 @@ interface Trip {
   activities: any[];
 }
 
+interface FlightOffer {
+  itineraries: Array<{
+    segments: Array<{
+      departure: {
+        iataCode: string;
+        terminal?: string;
+        at: string;
+      };
+      arrival: {
+        iataCode: string;
+        terminal?: string;
+        at: string;
+      };
+      carrierCode: string;
+      number: string;
+      aircraft: {
+        code: string;
+      };
+      duration: string;
+      id: string;
+      numberOfStops: number;
+      blacklistedInEU: boolean;
+    }>;
+  }>;
+  price: {
+    currency: string;
+    total: string;
+    base: string;
+    fees: Array<{
+      amount: string;
+      type: string;
+    }>;
+    grandTotal: string;
+  };
+  validatingAirlineCodes: string[];
+  travelerPricings: Array<{
+    travelerId: string;
+    fareOption: string;
+    travelerType: string;
+    price: {
+      currency: string;
+      total: string;
+      base: string;
+      fees: Array<{
+        amount: string;
+        type: string;
+      }>;
+      grandTotal: string;
+    };
+    fareDetailsBySegment: Array<{
+      segmentId: string;
+      cabin: string;
+      fareBasis: string;
+      brandedFare?: string;
+      class: string;
+      includedCheckedBags: {
+        quantity: number;
+      };
+    }>;
+  }>;
+}
+
+interface FlightSegment {
+  departure_airport: {
+    name: string;
+    id: string;
+    time: string;
+  };
+  arrival_airport: {
+    name: string;
+    id: string;
+    time: string;
+  };
+  duration: number;
+  airplane: string;
+  airline: string;
+  airline_logo: string;
+  travel_class: string;
+  flight_number: string;
+  legroom: string;
+  extensions: string[];
+  overnight?: boolean;
+  often_delayed_by_over_30_min?: boolean;
+}
+
+interface Layover {
+  duration: number;
+  name: string;
+  id: string;
+  overnight?: boolean;
+}
+
+interface FlightResult {
+  flights: FlightSegment[];
+  layovers: Layover[];
+  total_duration: number;
+  carbon_emissions: {
+    this_flight: number;
+    typical_for_this_route: number;
+    difference_percent: number;
+  };
+  price: number;
+  type: string;
+  airline_logo: string;
+  departure_token: string;
+}
+
+const formatDateForAPI = (date: Date) => {
+  return date.toISOString().split('T')[0];
+};
+
+const formatDate = (dateTimeStr: string) => {
+  const date = new Date(dateTimeStr);
+  return date.toLocaleDateString('en-US', { 
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric'
+  });
+};
+
+const formatDuration = (minutes: number) => {
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  return `${hours}h ${mins}m`;
+};
+
+const formatTime = (dateTimeStr: string) => {
+  const date = new Date(dateTimeStr);
+  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+};
+
 export default function TripDetails() {
   const params = useParams();
   const router = useRouter();
@@ -32,6 +163,9 @@ export default function TripDetails() {
   const [isSaving, setIsSaving] = useState(false);
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
   const [isDeleting, setIsDeleting] = useState(false);
+  const [flightResults, setFlightResults] = useState<FlightResult[]>([]);
+  const [flightError, setFlightError] = useState<string | null>(null);
+  const [passengers, setPassengers] = useState(1);
 
   useEffect(() => {
     fetchTripDetails();
@@ -97,13 +231,41 @@ export default function TripDetails() {
 
   const handleFlightSearch = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!trip) return;
+
     setIsSearching(true);
-    
+    setFlightError(null);
+
     try {
-      // Flight search API call will go here
-      await new Promise(resolve => setTimeout(resolve, 1000)); // Temporary delay
-    } catch (error) {
-      console.error("Failed to search flights:", error);
+      const response = await fetch('/api/flights/search', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          originLocationCode: trip.departure,
+          destinationLocationCode: trip.destination,
+          departureDate: formatDateForAPI(new Date(trip.startDate)),
+          returnDate: trip.endDate ? formatDateForAPI(new Date(trip.endDate)) : undefined,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.details || 'Failed to search flights');
+      }
+
+      const data = await response.json();
+      
+      if (Array.isArray(data)) {
+        setFlightResults(data);
+      } else {
+        console.error('Unexpected response format:', data);
+        setFlightError('Received unexpected response format from flight search');
+      }
+    } catch (err: any) {
+      setFlightError(err.message);
+      console.error('Error searching flights:', err);
     } finally {
       setIsSearching(false);
     }
@@ -351,6 +513,7 @@ export default function TripDetails() {
                     type="text"
                     placeholder="Departure Airport"
                     defaultValue={trip.departure}
+                    disabled
                   />
                 </div>
                 <div className="space-y-2">
@@ -359,6 +522,7 @@ export default function TripDetails() {
                     type="text"
                     placeholder="Destination Airport"
                     defaultValue={trip.destination}
+                    disabled
                   />
                 </div>
               </div>
@@ -373,7 +537,12 @@ export default function TripDetails() {
 
               <div className="space-y-2">
                 <label className="text-sm font-medium">Passengers</label>
-                <Input type="number" min="1" defaultValue="1" />
+                <Input 
+                  type="number" 
+                  min="1" 
+                  value={passengers}
+                  onChange={(e) => setPassengers(parseInt(e.target.value))}
+                />
               </div>
 
               <Button
@@ -385,13 +554,96 @@ export default function TripDetails() {
               </Button>
             </form>
 
-            {/* Flight search results will go here */}
+            {flightError && (
+              <div className="mt-4 p-4 bg-red-50 text-red-700 rounded-md">
+                {flightError}
+              </div>
+            )}
+
             <div className="mt-8">
               {isSearching ? (
                 <p className="text-gray-600">Searching for flights...</p>
+              ) : flightResults.length > 0 ? (
+                <div className="space-y-6">
+                  <h3 className="text-lg font-medium">Available Flights</h3>
+                  {flightResults.map((flight, index) => (
+                    <div key={index} className="border rounded-lg p-6 hover:shadow-md transition-shadow">
+                      <div className="flex justify-between items-start">
+                        <div className="space-y-4 flex-1">
+                          {/* Flight Segments */}
+                          {flight.flights.map((segment, i) => (
+                            <div key={i} className="space-y-2">
+                              <div className="flex items-center space-x-4">
+                                <img 
+                                  src={segment.airline_logo} 
+                                  alt={segment.airline}
+                                  className="w-8 h-8 object-contain"
+                                />
+                                <div className="flex-1">
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center space-x-2">
+                                      <span className="font-medium">{segment.departure_airport.id}</span>
+                                      <span>→</span>
+                                      <span className="font-medium">{segment.arrival_airport.id}</span>
+                                    </div>
+                                    <span className="text-sm text-gray-500">
+                                      {formatTime(segment.departure_airport.time)} - {formatTime(segment.arrival_airport.time)}
+                                    </span>
+                                  </div>
+                                  <div className="text-sm text-gray-600">
+                                    {segment.airline} {segment.flight_number} • {formatDate(segment.departure_airport.time)}
+                                  </div>
+                                </div>
+                              </div>
+                              
+                              {/* Layover */}
+                              {flight.layovers && i < flight.layovers.length && (
+                                <div className="ml-12 text-sm text-gray-500">
+                                  {flight.layovers[i].overnight ? 'Overnight layover' : 'Layover'}: {flight.layovers[i].name} ({flight.layovers[i].id}) • {formatDuration(flight.layovers[i].duration)}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+
+                          {/* Flight Details */}
+                          <div className="mt-4 grid grid-cols-2 gap-4 text-sm">
+                            <div>
+                              <span className="font-medium">Total Duration:</span> {formatDuration(flight.total_duration)}
+                            </div>
+                            <div>
+                              <span className="font-medium">Carbon Emissions:</span> {Math.round(flight.carbon_emissions.this_flight / 1000)}kg
+                              {flight.carbon_emissions.difference_percent !== 0 && (
+                                <span className={flight.carbon_emissions.difference_percent > 0 ? 'text-red-500' : 'text-green-500'}>
+                                  {' '}({flight.carbon_emissions.difference_percent > 0 ? '+' : ''}{flight.carbon_emissions.difference_percent}%)
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="text-right ml-6">
+                          <div className="text-2xl font-bold">
+                            ${flight.price.toLocaleString()}
+                          </div>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="mt-2"
+                            onClick={() => {
+                              // Handle flight selection
+                              console.log('Selected flight:', flight);
+                            }}
+                          >
+                            Select Flight
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               ) : (
                 <p className="text-gray-600">
-                  Search for flights to find the best deals
+                  {flightError ? flightError : "Search for flights to find the best deals"}
                 </p>
               )}
             </div>
