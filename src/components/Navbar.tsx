@@ -23,15 +23,15 @@ export function Navbar() {
           <div className="flex items-center">
             {session ? (
               <div className="flex items-center gap-4">
-                <Link href="/trips" className="cursor-pointer">
-                  <Button variant="ghost" className="hover:bg-gray-100 cursor-pointer">
+                <Link href="/trips">
+                  <Button className="bg-blue-600 text-white hover:bg-blue-700">
                     My Trips
                   </Button>
                 </Link>
                 <Button
                   variant="outline"
                   onClick={() => signOut({ callbackUrl: "/" })}
-                  className="hover:bg-gray-100 cursor-pointer"
+                  className="hover:bg-gray-100"
                 >
                   Sign Out
                 </Button>
@@ -50,8 +50,10 @@ export function Navbar() {
                 </div>
               </div>
             ) : (
-              <Link href="/auth/signin" className="cursor-pointer">
-                <Button className="hover:bg-blue-700">Sign In</Button>
+              <Link href="/auth/signin">
+                <Button variant="outline" className="hover:bg-gray-100">
+                  Sign In
+                </Button>
               </Link>
             )}
           </div>

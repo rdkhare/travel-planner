@@ -1,11 +1,9 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
 import "./globals.css";
 import { Navbar } from "@/components/Navbar";
 import { Providers } from "@/components/Providers";
 import GoogleMapsScript from "@/components/GoogleMapsScript";
-
-const inter = Inter({ subsets: ["latin"] });
+import ClientLayout from "./client-layout";
 
 export const metadata: Metadata = {
   title: "Travel Planner",
@@ -18,15 +16,17 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <GoogleMapsScript />
       </head>
-      <body className={inter.className}>
-        <Providers>
-          <Navbar />
-          {children}
-        </Providers>
+      <body>
+        <ClientLayout>
+          <Providers>
+            <Navbar />
+            {children}
+          </Providers>
+        </ClientLayout>
       </body>
     </html>
   );

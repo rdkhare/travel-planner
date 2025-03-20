@@ -26,6 +26,10 @@ export default function PlaceAutocomplete({
   const autocompleteRef = useRef<InstanceType<typeof google.maps.places.Autocomplete> | null>(null);
 
   useEffect(() => {
+    setInputValue(defaultValue);
+  }, [defaultValue]);
+
+  useEffect(() => {
     const initializeAutocomplete = () => {
       console.log('Initializing autocomplete...');
       

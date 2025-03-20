@@ -123,4 +123,11 @@
   body {
     @apply bg-background text-foreground;
   }
+  input {
+    @apply text-gray-900;
+  }
 }
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;

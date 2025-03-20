@@ -22,6 +22,7 @@ type SearchFormData = {
 export default function Home() {
   const [date, setDate] = useState<DateRange | undefined>();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [errorDialog, setErrorDialog] = useState({ isOpen: false, message: "" });
   const [searchData, setSearchData] = useState<{
     from: string;
     fromId: string;
@@ -39,12 +40,18 @@ export default function Home() {
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!date?.from || !date?.to) {
-      alert("Please select travel dates");
+      setErrorDialog({
+        isOpen: true,
+        message: "Please select travel dates"
+      });
       return;
     }
 
     if (!searchData.from || !searchData.to) {
-      alert("Please select both departure and destination cities");
+      setErrorDialog({
+        isOpen: true,
+        message: "Please select both departure and destination cities"
+      });
       return;
     }
 
@@ -79,6 +86,31 @@ export default function Home() {
 
   return (
     <main className="flex min-h-screen flex-col items-center">
+      <Dialog open={errorDialog.isOpen} onOpenChange={(open) => setErrorDialog(prev => ({ ...prev, isOpen: open }))}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <svg
+                className="w-6 h-6 text-red-500"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                />
+              </svg>
+              <span>Invalid Input</span>
+            </DialogTitle>
+            <DialogDescription className="text-red-600">
+              {errorDialog.message}
+            </DialogDescription>
+          </DialogHeader>
+        </DialogContent>
+      </Dialog>
       {/* Hero Section */}
       <section className="w-full bg-gradient-to-r from-blue-600 to-blue-400 py-20">
         <div className="container mx-auto px-4">
@@ -94,7 +126,7 @@ export default function Home() {
           {/* Search Box */}
           <div className="max-w-4xl mx-auto bg-white rounded-lg shadow-xl p-6 mt-8">
             <form onSubmit={handleSearch}>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-[1fr,1fr,1.5fr,auto] gap-4">
                 <div className="col-span-1">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     From
@@ -129,13 +161,13 @@ export default function Home() {
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Dates
                   </label>
-                  <DateRangePicker date={date} onDateChange={setDate} />
+                  <DateRangePicker date={date} onDateChange={setDate} variant="white" />
                 </div>
                 <div className="col-span-1">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     &nbsp;
                   </label>
-                  <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700">
+                  <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white px-6">
                     Search
                   </Button>
                 </div>

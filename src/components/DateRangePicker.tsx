@@ -14,15 +14,21 @@ import {
 } from "@/components/ui/popover";
 
 interface DateRangePickerProps {
-  date: DateRange | undefined;
-  onDateChange: (date: DateRange | undefined) => void;
+  date?: DateRange;
+  onDateChange?: (date: DateRange | undefined) => void;
+  variant?: "default" | "white";
+  fromDate?: Date;
+  toDate?: Date;
   className?: string;
 }
 
 export function DateRangePicker({
   date,
   onDateChange,
-  className,
+  variant = "default",
+  fromDate,
+  toDate,
+  className
 }: DateRangePickerProps) {
   return (
     <div className={cn("grid gap-2", className)}>
@@ -33,21 +39,21 @@ export function DateRangePicker({
             variant={"outline"}
             className={cn(
               "w-full justify-start text-left font-normal",
-              !date && "text-muted-foreground"
+              !date && "text-muted-foreground",
+              variant === "white" && "bg-white text-gray-900 hover:bg-white hover:text-gray-900"
             )}
           >
             <CalendarIcon className="mr-2 h-4 w-4" />
             {date?.from ? (
               date.to ? (
                 <>
-                  {format(date.from, "LLL dd, y")} -{" "}
-                  {format(date.to, "LLL dd, y")}
+                  {format(date.from, "LLL dd, y")} - {format(date.to, "LLL dd, y")}
                 </>
               ) : (
                 format(date.from, "LLL dd, y")
               )
             ) : (
-              <span>Pick a date range</span>
+              <span className="text-gray-400">Pick a date</span>
             )}
           </Button>
         </PopoverTrigger>
@@ -59,6 +65,10 @@ export function DateRangePicker({
             selected={date}
             onSelect={onDateChange}
             numberOfMonths={2}
+            disabled={(date) => 
+              (fromDate ? date < fromDate : false) || 
+              (toDate ? date > toDate : false)
+            }
           />
         </PopoverContent>
       </Popover>
