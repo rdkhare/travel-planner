@@ -79,6 +79,7 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+  cursor: none !important;
 }
 
 .dark {
@@ -131,3 +132,78 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Cursor Styles */
+html,
+body,
+* {
+  cursor: none !important;
+}
+
+/* More specific selectors to override any other cursor styles */
+*:hover,
+*:active,
+*:focus {
+  cursor: none !important;
+}
+
+.custom-cursor {
+  @apply fixed pointer-events-none z-[9999] transition-transform duration-100;
+  transform: translate(-50%, -50%);
+}
+
+.custom-cursor[data-pointer="true"] {
+  @apply scale-150;
+}
+
+.custom-cursor[data-clicking="true"] {
+  @apply scale-75;
+}
+
+.cursor-dot {
+  @apply h-6 w-6 rounded-full bg-white shadow-[0_0_10px_rgba(0,0,0,0.3)] transition-all duration-200;
+}
+
+.custom-cursor[data-pointer="true"] .cursor-dot {
+  @apply bg-white/90;
+}
+
+.custom-cursor[data-clicking="true"] .cursor-dot {
+  @apply bg-white/70 shadow-[0_0_15px_rgba(0,0,0,0.4)];
+}
+
+/* Special handling for interactive elements */
+a, 
+button, 
+input, 
+select, 
+textarea, 
+[role="button"], 
+.cursor-pointer,
+[type="button"],
+[type="reset"],
+[type="submit"],
+[type="text"],
+[type="email"],
+[type="url"],
+[type="password"],
+[type="number"],
+[type="date"],
+[type="datetime-local"],
+[type="month"],
+[type="search"],
+[type="tel"],
+[type="time"],
+[type="week"] {
+  cursor: none !important;
+}
+
+/* Handle hover states */
+*:hover {
+  cursor: none !important;
+}
+
+/* Only allow default cursor in iframes */
+iframe {
+  cursor: auto !important;
+}
