@@ -1,36 +1,121 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Travel Planner
 
-## Getting Started
+A modern web application for planning and managing your trips, built with Next.js 14, TypeScript, and Tailwind CSS. This application helps users organize their travel plans by managing flights, accommodations, and activities all in one place.
 
-First, run the development server:
+## Features
 
+- ✈️ **Flight Search & Booking**: Search and compare flights using Google Flights data
+- 🏨 **Accommodation Management**: (Coming Soon) Track and manage your hotel bookings
+- 🎯 **Activity Planning**: (Coming Soon) Plan and organize your trip activities
+- 📅 **Trip Timeline**: Visualize your entire trip schedule
+- 🔍 **Smart Search**: Integrated with Google Places API for location search
+- 🎨 **Modern UI**: Clean and responsive design with Tailwind CSS
+- 🔐 **User Authentication**: Secure user accounts and data
+
+## Prerequisites
+
+Before you begin, ensure you have the following installed:
+- Node.js (v18 or higher)
+- npm or yarn
+- PostgreSQL (v14 or higher)
+
+## Required API Keys
+
+You'll need to obtain the following API keys and credentials:
+
+1. **Google Places API**
+   - Required for location search functionality
+   - Get it from [Google Cloud Console](https://console.cloud.google.com/)
+   - Enable Places API and Maps JavaScript API
+
+2. **SerpAPI** (for flight search)
+   - Sign up at [SerpAPI](https://serpapi.com/)
+   - Get your API key from the dashboard
+   - Used to fetch real-time flight data from Google Flights
+
+## Environment Setup
+
+Create a `.env.local` file in the root directory with the following variables:
+
+```env
+# Database
+DATABASE_URL="postgresql://username:password@localhost:5432/travel_planner"
+
+# Authentication (if using NextAuth.js)
+NEXTAUTH_SECRET="your-secret-key"
+NEXTAUTH_URL="http://localhost:3000"
+
+# Google Places API
+NEXT_PUBLIC_GOOGLE_MAPS_API_KEY="your-google-maps-api-key"
+
+# SerpAPI
+SERPAPI_API_KEY="your-serpapi-key"
+```
+
+## Database Setup
+
+1. Create a PostgreSQL database:
+```bash
+createdb travel_planner
+```
+
+2. Run the database migrations:
+```bash
+npx prisma migrate dev
+```
+
+## Installation
+
+1. Clone the repository:
+```bash
+git clone https://github.com/yourusername/travel-planner.git
+cd travel-planner
+```
+
+2. Install dependencies:
+```bash
+npm install
+# or
+yarn install
+```
+
+3. Run the development server:
 ```bash
 npm run dev
 # or
 yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+4. Open [http://localhost:3000](http://localhost:3000) with your browser to see the application.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Project Structure
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```
+travel-planner/
+├── src/
+│   ├── app/                 # Next.js app router pages
+│   ├── components/          # Reusable UI components
+│   ├── lib/                 # Utility functions and shared logic
+│   └── types/              # TypeScript type definitions
+├── prisma/                  # Database schema and migrations
+├── public/                  # Static files
+└── ...
+```
 
-## Learn More
+## Technologies Used
 
-To learn more about Next.js, take a look at the following resources:
+- [Next.js 14](https://nextjs.org/) - React framework
+- [TypeScript](https://www.typescriptlang.org/) - Type safety
+- [Tailwind CSS](https://tailwindcss.com/) - Styling
+- [Prisma](https://www.prisma.io/) - Database ORM
+- [NextAuth.js](https://next-auth.js.org/) - Authentication
+- [SerpAPI](https://serpapi.com/) - Flight search
+- [Google Places API](https://developers.google.com/maps/documentation/places/web-service/overview) - Location search
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Contributing
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Contributions are welcome! Please feel free to submit a Pull Request.
 
-## Deploy on Vercel
+## License
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+This project is licensed under the MIT License - see the LICENSE file for details.
