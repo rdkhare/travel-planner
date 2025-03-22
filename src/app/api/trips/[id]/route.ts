@@ -23,7 +23,11 @@ export async function GET(
         id: params.id,
       },
       include: {
-        flights: true,
+        flights: {
+          include: {
+            returnFlight: true
+          }
+        },
         activities: true,
         accommodations: true,
       },

@@ -9,6 +9,7 @@ import { DateRange } from "react-day-picker";
 import { Loader2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import PlaceAutocomplete from "@/components/PlaceAutocomplete";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 
 interface Trip {
   id: string;
@@ -128,11 +129,36 @@ interface FlightResult {
   type: string;
   airline_logo: string;
   departure_token: string;
+  booking_token?: string;
 }
 
 interface Place {
   name: string;
   placeId: string;
+}
+
+interface SavedFlight {
+  id: string;
+  airline: string;
+  flightNumber: string;
+  departure: string;
+  arrival: string;
+  cost: number;
+  isBooked: boolean;
+  bookingToken?: string;
+  returnFlight?: {
+    airline: string;
+    flightNumber: string;
+    departure: string;
+    arrival: string;
+    cost: number;
+    bookingToken?: string;
+  };
+}
+
+interface FlightPair {
+  outbound: FlightResult;
+  return: FlightResult;
 }
 
 const formatDateForAPI = (date: Date) => {
@@ -195,6 +221,21 @@ export default function TripDetails() {
   const [isSelectingFlight, setIsSelectingFlight] = useState(false);
   const [selectedFlightIds, setSelectedFlightIds] = useState<Set<string>>(new Set());
   const [errorDialog, setErrorDialog] = useState({ isOpen: false, message: "" });
+  const [selectedOutboundFlight, setSelectedOutboundFlight] = useState<FlightResult | null>(null);
+  const [returnFlights, setReturnFlights] = useState<FlightResult[]>([]);
+  const [isSearchingReturn, setIsSearchingReturn] = useState(false);
+  const [showFlightSearch, setShowFlightSearch] = useState(false);
+  const [showBookingDialog, setShowBookingDialog] = useState(false);
+  const [selectedFlights, setSelectedFlights] = useState<{
+    outbound: FlightResult | null;
+    return: FlightResult | null;
+  }>({ outbound: null, return: null });
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [flightToDelete, setFlightToDelete] = useState<{
+    id: string;
+    isReturn: boolean;
+    type: string;
+  } | null>(null);
 
   useEffect(() => {
     fetchTripDetails();
@@ -203,6 +244,10 @@ export default function TripDetails() {
   useEffect(() => {
     if (trip) {
       setDateRange({
+        from: new Date(trip.startDate),
+        to: new Date(trip.endDate),
+      });
+      setFlightDate({
         from: new Date(trip.startDate),
         to: new Date(trip.endDate),
       });
@@ -291,10 +336,16 @@ export default function TripDetails() {
       return;
     }
 
+    // Reset states when starting a new search
+    setSelectedOutboundFlight(null);
+    setReturnFlights([]);
+    setFlightResults([]);
+
     setIsSearching(true);
     setFlightError(null);
 
     try {
+      // Search for outbound flights
       const response = await fetch('/api/flights/search', {
         method: 'POST',
         headers: {
@@ -303,8 +354,8 @@ export default function TripDetails() {
         body: JSON.stringify({
           originLocationCode: trip.departure,
           destinationLocationCode: trip.destination,
-          departureDate: formatDateForAPI(new Date(trip.startDate)),
-          returnDate: trip.endDate ? formatDateForAPI(new Date(trip.endDate)) : undefined,
+          departureDate: formatDateForAPI(flightDate.from),
+          returnDate: formatDateForAPI(flightDate.to),
         }),
       });
 
@@ -313,19 +364,178 @@ export default function TripDetails() {
         throw new Error(errorData.details || 'Failed to search flights');
       }
 
-      const data = await response.json();
+      const flightData = await response.json();
       
-      if (Array.isArray(data)) {
-        setFlightResults(data);
+      if (Array.isArray(flightData) && flightData.length > 0) {
+        setFlightResults(flightData);
       } else {
-        console.error('Unexpected response format:', data);
-        setFlightError('Received unexpected response format from flight search');
+        setFlightError('No flights found for the selected dates');
       }
     } catch (err: any) {
       setFlightError(err.message);
       console.error('Error searching flights:', err);
     } finally {
       setIsSearching(false);
+    }
+  };
+
+  const handleOutboundFlightSelection = async (flight: FlightResult) => {
+    setSelectedOutboundFlight(flight);
+    setIsSearchingReturn(true);
+    setFlightError(null);
+
+    try {
+      // Search for return flights using the departure_token
+      const response = await fetch('/api/flights/search', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          originLocationCode: trip?.departure,
+          destinationLocationCode: trip?.destination,
+          departureDate: formatDateForAPI(flightDate?.from!),
+          returnDate: formatDateForAPI(flightDate?.to!),
+          departure_token: flight.departure_token
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.details || 'Failed to search return flights');
+      }
+
+      const returnFlightData = await response.json();
+      
+      if (Array.isArray(returnFlightData) && returnFlightData.length > 0) {
+        setReturnFlights(returnFlightData);
+      } else {
+        setFlightError('No return flights found for the selected dates');
+      }
+    } catch (err: any) {
+      setFlightError(err.message);
+      console.error('Error searching return flights:', err);
+    } finally {
+      setIsSearchingReturn(false);
+    }
+  };
+
+  const handleFlightSelection = async (returnFlight: FlightResult) => {
+    if (!trip || !selectedOutboundFlight) return;
+    
+    const outboundFirstSegment = selectedOutboundFlight.flights[0];
+    const outboundLastSegment = selectedOutboundFlight.flights[selectedOutboundFlight.flights.length - 1];
+    const returnFirstSegment = returnFlight.flights[0];
+    const returnLastSegment = returnFlight.flights[returnFlight.flights.length - 1];
+    
+    setIsSelectingFlight(true);
+    try {
+      // Store selected flights for booking dialog
+      setSelectedFlights({
+        outbound: selectedOutboundFlight,
+        return: returnFlight
+      });
+      setShowBookingDialog(true);
+    } catch (error) {
+      console.error('Error preparing flight selection:', error);
+      setFlightError(error instanceof Error ? error.message : 'Failed to prepare flight selection');
+    } finally {
+      setIsSelectingFlight(false);
+    }
+  };
+
+  const handleBookingConfirmation = async (bookOutbound: boolean, bookReturn: boolean) => {
+    if (!trip || !selectedFlights.outbound || !selectedFlights.return) return;
+
+    const outboundFirstSegment = selectedFlights.outbound.flights[0];
+    const outboundLastSegment = selectedFlights.outbound.flights[selectedFlights.outbound.flights.length - 1];
+    const returnFirstSegment = selectedFlights.return.flights[0];
+    const returnLastSegment = selectedFlights.return.flights[selectedFlights.return.flights.length - 1];
+
+    try {
+      // Remove any existing flights
+      if (trip.flights.length > 0) {
+        for (const existingFlight of trip.flights) {
+          const response = await fetch(`/api/trips/${params.id}/flights?flightId=${existingFlight.id}`, {
+            method: 'DELETE',
+          });
+
+          if (!response.ok) {
+            throw new Error('Failed to remove existing flight');
+          }
+        }
+      }
+      
+      const flightData = {
+        airline: outboundFirstSegment.airline,
+        flightNumber: outboundFirstSegment.flight_number,
+        departure: {
+          airport: outboundFirstSegment.departure_airport.id,
+          time: outboundFirstSegment.departure_airport.time
+        },
+        arrival: {
+          airport: outboundLastSegment.arrival_airport.id,
+          time: outboundLastSegment.arrival_airport.time
+        },
+        cost: selectedFlights.outbound.price,
+        isBooked: bookOutbound,
+        bookingToken: bookOutbound ? selectedFlights.outbound.booking_token : undefined,
+        returnFlight: {
+          airline: returnFirstSegment.airline,
+          flightNumber: returnFirstSegment.flight_number,
+          departure: {
+            airport: returnFirstSegment.departure_airport.id,
+            time: returnFirstSegment.departure_airport.time
+          },
+          arrival: {
+            airport: returnLastSegment.arrival_airport.id,
+            time: returnLastSegment.arrival_airport.time
+          },
+          cost: selectedFlights.return.price,
+          isBooked: bookReturn,
+          bookingToken: bookReturn ? selectedFlights.return.booking_token : undefined
+        }
+      };
+
+      const response = await fetch(`/api/trips/${params.id}/flights`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(flightData),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.details || 'Failed to save flight');
+      }
+
+      const savedFlight = await response.json();
+      
+      // Update local state
+      setTrip(prev => prev ? {
+        ...prev,
+        flights: [savedFlight]
+      } : null);
+
+      // Open booking pages based on user selection
+      if (bookOutbound && selectedFlights.outbound.booking_token) {
+        window.open(`https://www.google.com/flights/booking?token=${selectedFlights.outbound.booking_token}`, '_blank');
+      }
+      if (bookReturn && selectedFlights.return.booking_token) {
+        window.open(`https://www.google.com/flights/booking?token=${selectedFlights.return.booking_token}`, '_blank');
+      }
+
+      // Reset selection states and navigate to overview
+      setSelectedOutboundFlight(null);
+      setReturnFlights([]);
+      setFlightResults([]);
+      setActiveTab("overview");
+      setShowBookingDialog(false);
+      setSelectedFlights({ outbound: null, return: null });
+    } catch (error) {
+      console.error('Error managing flight selection:', error);
+      setFlightError(error instanceof Error ? error.message : 'Failed to manage flight selection');
     }
   };
 
@@ -358,75 +568,211 @@ export default function TripDetails() {
     ) ?? false;
   };
 
-  const handleFlightSelection = async (flight: FlightResult) => {
-    if (!trip) return;
-    
-    const firstSegment = flight.flights[0];
-    const lastSegment = flight.flights[flight.flights.length - 1];
-    
-    // Check if this flight is already selected
-    const isSelected = isFlightSelected(firstSegment.flight_number, firstSegment.departure_airport.time);
-    
-    setIsSelectingFlight(true);
-    try {
-      if (isSelected) {
-        // Find the flight ID to delete
-        const existingFlight = trip.flights.find(
-          f => f.flightNumber === firstSegment.flight_number && 
-              new Date(f.departure).getTime() === new Date(firstSegment.departure_airport.time).getTime()
-        );
-        
-        if (!existingFlight) {
-          throw new Error('Could not find flight to remove');
-        }
+  const bookedFlights = trip?.flights?.filter((flight) => flight.isBooked) || [];
+  const hasBookedOutboundFlight = bookedFlights.length > 0;
+  const hasBookedReturnFlight = bookedFlights.some((flight) => flight.returnFlight);
 
-        const response = await fetch(`/api/trips/${params.id}/flights?flightId=${existingFlight.id}`, {
+  // Update the flight display in the overview section
+  const renderFlightStatus = (isBooked: boolean) => {
+    if (isBooked) {
+      return <div className="text-sm text-green-600 font-medium">✓ Flight Booked</div>;
+    }
+    return <div className="text-sm text-red-600 font-medium">Not Booked</div>;
+  };
+
+  const handleDeleteFlightClick = (flightId: string, isReturn: boolean) => {
+    setFlightToDelete({
+      id: flightId,
+      isReturn,
+      type: isReturn ? "return" : "outbound"
+    });
+    setShowDeleteDialog(true);
+  };
+
+  const handleDeleteFlight = async () => {
+    if (!flightToDelete) return;
+    
+    try {
+      let response;
+      
+      if (flightToDelete.isReturn) {
+        // Delete just the return flight using the return flight endpoint
+        response = await fetch(`/api/trips/${params.id}/flights?flightId=${flightToDelete.id}`, {
           method: 'DELETE',
         });
-
-        if (!response.ok) {
-          throw new Error('Failed to remove flight');
-        }
-
-        // Update local state
-        setTrip(prev => prev ? {
-          ...prev,
-          flights: prev.flights.filter(f => f.id !== existingFlight.id)
-        } : null);
       } else {
-        // Add new flight
-        const response = await fetch(`/api/trips/${params.id}/flights`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            airline: firstSegment.airline,
-            flightNumber: firstSegment.flight_number,
-            departureTime: firstSegment.departure_airport.time,
-            arrivalTime: lastSegment.arrival_airport.time,
-            cost: flight.price,
-          }),
+        // Delete the outbound flight using the outbound endpoint
+        response = await fetch(`/api/trips/${params.id}/flights?flightId=${flightToDelete.id}`, {
+          method: 'DELETE',
         });
+      }
 
-        if (!response.ok) {
-          throw new Error('Failed to save flight');
-        }
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.details || `Failed to delete ${flightToDelete.type} flight`);
+      }
 
-        const savedFlight = await response.json();
-        
-        // Update local state
-        setTrip(prev => prev ? {
-          ...prev,
-          flights: [...prev.flights, savedFlight]
-        } : null);
+      // Update the UI state based on what was deleted
+      setTrip(prev => prev ? {
+        ...prev,
+        flights: prev.flights.filter(f => f.id !== flightToDelete.id)
+      } : null);
+
+      // Reset states
+      setShowDeleteDialog(false);
+      setFlightToDelete(null);
+      
+      // Show flight search if appropriate
+      if (!flightToDelete.isReturn) {
+        setShowFlightSearch(true);
+        setSelectedOutboundFlight(null);
+        setReturnFlights([]);
+        setFlightResults([]);
       }
     } catch (error) {
-      console.error('Error managing flight selection:', error);
-      setFlightError(error instanceof Error ? error.message : 'Failed to manage flight selection');
-    } finally {
-      setIsSelectingFlight(false);
+      console.error('Failed to delete flight:', error);
+      setFlightError(error instanceof Error ? error.message : 'Failed to delete flight. Please try again.');
+      setShowDeleteDialog(false);
+      setFlightToDelete(null);
     }
+  };
+
+  const handleChangeFlightClick = (isReturn: boolean) => {
+    setShowFlightSearch(true);
+    setIsSearchingReturn(isReturn);
+    setFlightResults([]);
+    setReturnFlights([]);
+
+    // If changing return flight, keep the outbound flight selected
+    if (isReturn && trip?.flights[0]) {
+      const outboundFlight: FlightResult = {
+        flights: [{
+          airline: trip.flights[0].airline,
+          flight_number: trip.flights[0].flightNumber,
+          departure_airport: {
+            name: trip.departure,
+            id: trip.flights[0].departure.airport,
+            time: trip.flights[0].departure
+          },
+          arrival_airport: {
+            name: trip.destination,
+            id: trip.flights[0].arrival.airport,
+            time: trip.flights[0].arrival
+          },
+          duration: 0, // These fields are required by the type but not used in this context
+          airplane: "",
+          airline_logo: "",
+          travel_class: "",
+          legroom: "",
+          extensions: []
+        }],
+        layovers: [],
+        total_duration: 0,
+        carbon_emissions: {
+          this_flight: 0,
+          typical_for_this_route: 0,
+          difference_percent: 0
+        },
+        price: trip.flights[0].cost,
+        type: "outbound",
+        airline_logo: "",
+        departure_token: "",
+        booking_token: trip.flights[0].bookingToken
+      };
+      setSelectedOutboundFlight(outboundFlight);
+    } else {
+      setSelectedOutboundFlight(null);
+    }
+
+    // Start a new flight search
+    handleFlightSearch(new Event('submit') as any);
+  };
+
+  // Update the flight card rendering to pass isReturn to delete function
+  const renderFlightCard = (flight: any, isReturn: boolean = false) => {
+    // If this is a return flight card, use the flight data directly
+    // If this is an outbound flight card, use the main flight data
+    const flightData = isReturn ? flight : flight;
+    const departureTime = formatFlightDateTime(flightData.departure);
+    const arrivalTime = formatFlightDateTime(flightData.arrival);
+    
+    return (
+      <Card className="w-full">
+        <CardHeader>
+          <div className="flex justify-between items-start">
+            <div>
+              <CardTitle>{isReturn ? "Return Flight" : "Outbound Flight"}</CardTitle>
+              <CardDescription>
+                {flightData.airline} {flightData.flightNumber}
+              </CardDescription>
+            </div>
+            <div className="flex items-center space-x-2">
+              {!flightData.isBooked && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleChangeFlightClick(isReturn)}
+                  className="text-blue-600 hover:text-blue-800"
+                >
+                  <svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  Change
+                </Button>
+              )}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => handleDeleteFlightClick(flightData.id, isReturn)}
+                className="text-red-600 hover:text-red-800"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <p className="text-sm font-medium">Departure</p>
+              <p className="text-sm">{flightData.departure.airport}</p>
+              <p className="text-sm">{departureTime.date}</p>
+              <p className="text-sm">{departureTime.time}</p>
+            </div>
+            <div>
+              <p className="text-sm font-medium">Arrival</p>
+              <p className="text-sm">{flightData.arrival.airport}</p>
+              <p className="text-sm">{arrivalTime.date}</p>
+              <p className="text-sm">{arrivalTime.time}</p>
+            </div>
+          </div>
+          <div className="mt-4">
+            <p className="text-sm font-medium">Cost</p>
+            <p className="text-sm">${flightData.cost.toFixed(2)}</p>
+          </div>
+          <div className="mt-2">
+            {renderFlightStatus(flightData.isBooked)}
+            {!flightData.isBooked && flightData.bookingToken && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => window.open(`https://www.google.com/flights/booking?token=${flightData.bookingToken}`, '_blank')}
+                className="mt-2"
+              >
+                Book Flight
+              </Button>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    );
+  };
+
+  const formatPrice = (price: number | undefined) => {
+    if (typeof price === 'undefined') return '$0.00';
+    return `$${price.toLocaleString()}`;
   };
 
   if (isLoading) {
@@ -622,47 +968,24 @@ export default function TripDetails() {
                     </svg>
                     Flights
                   </h3>
-                  {(trip?.flights?.length ?? 0) > 0 ? (
-                    <ul className="space-y-3">
+                  {trip.flights && trip.flights.length > 0 ? (
+                    <div className="space-y-4">
                       {trip.flights.map((flight) => (
-                        <li key={flight.id} className="bg-gray-50 rounded-xl p-4 hover:bg-gray-100 transition-colors">
-                          <div className="flex flex-col space-y-3">
-                            <div className="flex items-center justify-between">
-                              <span className="font-medium text-gray-900">{flight.airline} - {flight.flightNumber}</span>
-                              <span className="font-medium text-blue-600">${flight.cost?.toLocaleString()}</span>
-                            </div>
-                            <div className="text-sm space-y-2">
-                              <div className="grid grid-cols-[auto,1fr] gap-x-3 gap-y-2">
-                                <span className="text-gray-500 flex items-center">
-                                  <svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
-                                  </svg>
-                                  Departure:
-                                </span>
-                                <div className="text-gray-900">
-                                  {formatFlightDateTime(flight.departure).date} • {formatFlightDateTime(flight.departure).time}
-                                </div>
-                                <span className="text-gray-500 flex items-center">
-                                  <svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-                                  </svg>
-                                  Arrival:
-                                </span>
-                                <div className="text-gray-900">
-                                  {formatFlightDateTime(flight.arrival).date} • {formatFlightDateTime(flight.arrival).time}
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </li>
+                        <div key={flight.id} className="space-y-6">
+                          {/* Show all flights regardless of their relationship */}
+                          {renderFlightCard(flight)}
+                        </div>
                       ))}
-                    </ul>
+                    </div>
                   ) : (
                     <div className="bg-gray-50 rounded-xl p-6 text-center h-[160px] flex flex-col justify-center">
                       <p className="text-gray-500 mb-4">No flights added yet</p>
                       <Button
                         variant="outline"
-                        onClick={() => setActiveTab("flights")}
+                        onClick={() => {
+                          setActiveTab("flights");
+                          setShowFlightSearch(true);
+                        }}
                         className="w-full"
                       >
                         Search Flights
@@ -733,166 +1056,87 @@ export default function TripDetails() {
 
           {activeTab === "flights" && (
             <div>
-              <h2 className="text-xl font-semibold mb-6 text-gray-900">Flight Search</h2>
-              <div className="bg-gray-50 rounded-xl p-6 mb-8">
-                <form onSubmit={handleFlightSearch} className="space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Always show search interface first */}
+              <>
+                <h2 className="text-xl font-semibold mb-6 text-gray-900">Search Flights</h2>
+                <div className="bg-gray-50 rounded-xl p-6 mb-8">
+                  <form onSubmit={handleFlightSearch} className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-gray-700">From</label>
+                        <Input
+                          type="text"
+                          placeholder="Departure Airport"
+                          defaultValue={trip.departure}
+                          disabled
+                          className="bg-white"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-gray-700">To</label>
+                        <Input
+                          type="text"
+                          placeholder="Destination Airport"
+                          defaultValue={trip.destination}
+                          disabled
+                          className="bg-white"
+                        />
+                      </div>
+                    </div>
+                    
                     <div className="space-y-2">
-                      <label className="text-sm font-medium text-gray-700">From</label>
-                      <Input
-                        type="text"
-                        placeholder="Departure Airport"
-                        defaultValue={trip.departure}
-                        disabled
-                        className="bg-white"
+                      <label className="text-sm font-medium text-gray-700">Travel Dates</label>
+                      <DateRangePicker
+                        date={flightDate}
+                        onDateChange={() => {}}
+                        variant="white"
+                        fromDate={new Date(trip.startDate)}
+                        toDate={new Date(trip.endDate)}
+                        className="bg-white pointer-events-none opacity-75 cursor-not-allowed border border-gray-200"
                       />
                     </div>
+
                     <div className="space-y-2">
-                      <label className="text-sm font-medium text-gray-700">To</label>
-                      <Input
-                        type="text"
-                        placeholder="Destination Airport"
-                        defaultValue={trip.destination}
-                        disabled
-                        className="bg-white"
+                      <label className="text-sm font-medium text-gray-700">Passengers</label>
+                      <Input 
+                        type="number" 
+                        min="1" 
+                        value={passengers}
+                        onChange={(e) => setPassengers(parseInt(e.target.value))}
+                        className="bg-white max-w-[200px]"
                       />
                     </div>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700">Travel Dates</label>
-                    <DateRangePicker
-                      date={flightDate}
-                      onDateChange={setFlightDate}
-                      variant="white"
-                      fromDate={new Date(trip.startDate)}
-                      toDate={new Date(trip.endDate)}
-                      className="bg-white"
-                    />
-                  </div>
 
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700">Passengers</label>
-                    <Input 
-                      type="number" 
-                      min="1" 
-                      value={passengers}
-                      onChange={(e) => setPassengers(parseInt(e.target.value))}
-                      className="bg-white max-w-[200px]"
-                    />
-                  </div>
-
-                  <Button
-                    type="submit"
-                    className="w-full md:w-auto px-8"
-                    disabled={isSearching}
-                  >
-                    {isSearching ? "Searching..." : "Search Flights"}
-                  </Button>
-                </form>
-              </div>
-
-              {flightError && (
-                <div className="mb-8 p-4 bg-red-50 text-red-700 rounded-xl border border-red-100">
-                  {flightError}
+                    <Button
+                      type="submit"
+                      className="w-full md:w-auto px-8"
+                      disabled={isSearching}
+                    >
+                      {isSearching ? "Searching..." : "Search Flights"}
+                    </Button>
+                  </form>
                 </div>
-              )}
 
-              <div>
-                {isSearching ? (
-                  <div className="text-center py-12">
-                    <p className="text-gray-600">Searching for flights...</p>
-                  </div>
-                ) : flightResults.length > 0 ? (
-                  <div className="space-y-6">
-                    <h3 className="text-lg font-medium text-gray-900">Available Flights</h3>
-                    {flightResults.map((flight, index) => (
-                      <div key={index} className="bg-white border border-gray-200 rounded-xl p-6 hover:shadow-md transition-shadow">
-                        <div className="flex justify-between items-start">
-                          <div className="space-y-6 flex-1">
-                            {/* Flight Segments */}
-                            {flight.flights.map((segment, i) => (
-                              <div key={i} className="space-y-3">
-                                <div className="flex items-center space-x-4">
-                                  <img 
-                                    src={segment.airline_logo} 
-                                    alt={segment.airline}
-                                    className="w-8 h-8 object-contain"
-                                  />
-                                  <div className="flex-1">
-                                    <div className="flex items-center justify-between">
-                                      <div className="flex items-center space-x-3">
-                                        <span className="font-medium text-gray-900">{segment.departure_airport.id}</span>
-                                        <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
-                                        </svg>
-                                        <span className="font-medium text-gray-900">{segment.arrival_airport.id}</span>
-                                      </div>
-                                      <span className="text-sm text-gray-500">
-                                        {formatTime(segment.departure_airport.time)} - {formatTime(segment.arrival_airport.time)}
-                                      </span>
-                                    </div>
-                                    <div className="text-sm text-gray-600 mt-1">
-                                      {segment.airline} {segment.flight_number} • {formatDate(segment.departure_airport.time)}
-                                    </div>
-                                  </div>
-                                </div>
-                                
-                                {/* Layover */}
-                                {flight.layovers && i < flight.layovers.length && (
-                                  <div className="ml-12 text-sm text-gray-500 bg-gray-50 rounded-lg px-4 py-2">
-                                    {flight.layovers[i].overnight ? 'Overnight layover' : 'Layover'}: {flight.layovers[i].name} ({flight.layovers[i].id}) • {formatDuration(flight.layovers[i].duration)}
-                                  </div>
-                                )}
-                              </div>
-                            ))}
-
-                            {/* Flight Details */}
-                            <div className="grid grid-cols-2 gap-6 text-sm bg-gray-50 rounded-lg p-4">
-                              <div>
-                                <span className="font-medium text-gray-700">Total Duration:</span>{' '}
-                                <span className="text-gray-900">{formatDuration(flight.total_duration)}</span>
-                              </div>
-                              <div>
-                                <span className="font-medium text-gray-700">Carbon Emissions:</span>{' '}
-                                <span className="text-gray-900">{Math.round(flight.carbon_emissions.this_flight / 1000)}kg</span>
-                                {flight.carbon_emissions.difference_percent !== 0 && (
-                                  <span className={flight.carbon_emissions.difference_percent > 0 ? 'text-red-500' : 'text-green-500'}>
-                                    {' '}({flight.carbon_emissions.difference_percent > 0 ? '+' : ''}{flight.carbon_emissions.difference_percent}%)
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="text-right ml-6 flex flex-col items-end">
-                            <div className="text-2xl font-bold text-gray-900 mb-2">
-                              ${flight.price.toLocaleString()}
-                            </div>
-                            <Button 
-                              variant={isFlightSelected(flight.flights[0].flight_number, flight.flights[0].departure_airport.time) ? "default" : "outline"}
-                              size="sm" 
-                              className="px-6"
-                              onClick={() => handleFlightSelection(flight)}
-                              disabled={isSelectingFlight}
-                            >
-                              {isSelectingFlight ? "Saving..." : 
-                               isFlightSelected(flight.flights[0].flight_number, flight.flights[0].departure_airport.time) 
-                               ? "Remove Flight" : "Select Flight"}
-                            </Button>
-                          </div>
-                        </div>
+                {/* Show existing flights if any */}
+                {trip.flights && trip.flights.length > 0 && (
+                  <div className="space-y-6 mt-8">
+                    <h2 className="text-xl font-semibold text-gray-900">Your Flights</h2>
+                    {trip.flights.map((flight) => (
+                      <div key={flight.id} className="space-y-6">
+                        {/* Show all flights regardless of their relationship */}
+                        {renderFlightCard(flight)}
                       </div>
                     ))}
                   </div>
-                ) : (
-                  <div className="text-center py-12">
-                    <p className="text-gray-600">
-                      {flightError ? flightError : "Search for flights to find the best deals"}
-                    </p>
+                )}
+
+                {/* Rest of the flight search results code */}
+                {flightError && (
+                  <div className="mb-8 p-4 bg-red-50 text-red-700 rounded-xl border border-red-100">
+                    {flightError}
                   </div>
                 )}
-              </div>
+              </>
             </div>
           )}
 
@@ -945,6 +1189,127 @@ export default function TripDetails() {
               {errorDialog.message}
             </DialogDescription>
           </DialogHeader>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={showBookingDialog} onOpenChange={setShowBookingDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Book Your Flights</DialogTitle>
+            <DialogDescription>
+              Would you like to book your flights now or save them for later?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-6 py-4">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="font-medium">Outbound Flight</h4>
+                  <p className="text-sm text-gray-500">
+                    {selectedFlights.outbound?.flights[0].airline} {selectedFlights.outbound?.flights[0].flight_number}
+                  </p>
+                </div>
+                <div className="flex space-x-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleBookingConfirmation(false, false)}
+                  >
+                    Later
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() => handleBookingConfirmation(true, false)}
+                  >
+                    Book Now
+                  </Button>
+                </div>
+              </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="font-medium">Return Flight</h4>
+                  <p className="text-sm text-gray-500">
+                    {selectedFlights.return?.flights[0].airline} {selectedFlights.return?.flights[0].flight_number}
+                  </p>
+                </div>
+                <div className="flex space-x-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleBookingConfirmation(false, false)}
+                  >
+                    Later
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() => handleBookingConfirmation(false, true)}
+                  >
+                    Book Now
+                  </Button>
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end space-x-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  // Save flights as not booked when canceling
+                  handleBookingConfirmation(false, false);
+                  setShowBookingDialog(false);
+                  setSelectedFlights({ outbound: null, return: null });
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => handleBookingConfirmation(true, true)}
+              >
+                Book Both Now
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={showDeleteDialog} onOpenChange={(open) => !open && setShowDeleteDialog(false)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <svg
+                className="w-6 h-6 text-red-500"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                />
+              </svg>
+              <span>Confirm Deletion</span>
+            </DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this {flightToDelete?.type} flight? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end space-x-3 pt-4">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowDeleteDialog(false);
+                setFlightToDelete(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteFlight}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Delete Flight
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

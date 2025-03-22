@@ -1,113 +1,111 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import { authOptions } from "../../../auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
+import { authOptions } from "../../../auth/[...nextauth]/route";
 
 // POST /api/trips/[id]/flights - Add a flight to a trip
 export async function POST(
   request: Request,
   context: { params: { id: string } }
 ) {
+  const params = await context.params;
+  const session = await getServerSession(authOptions);
+
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
-    const session = await getServerSession(authOptions);
+    const json = await request.json();
 
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const tripId = context.params.id;
-    
-    // Verify trip exists and belongs to user
-    const trip = await prisma.trip.findUnique({
+    // First, delete any existing flights for this trip
+    await prisma.flight.deleteMany({
       where: {
-        id: tripId,
-        userId: session.user.id,
-      },
+        tripId: params.id
+      }
     });
 
-    if (!trip) {
-      return NextResponse.json({ error: "Trip not found" }, { status: 404 });
-    }
-
-    const flightData = await request.json();
-    
-    // Create the flight record
-    const flight = await prisma.flight.create({
+    // Create the outbound flight
+    const outboundFlight = await prisma.flight.create({
       data: {
-        tripId,
-        airline: flightData.airline,
-        flightNumber: flightData.flightNumber,
-        departure: new Date(flightData.departureTime),
-        arrival: new Date(flightData.arrivalTime),
-        cost: flightData.cost,
-      },
+        airline: json.airline,
+        flightNumber: json.flightNumber,
+        departure: new Date(json.departure.time),
+        arrival: new Date(json.arrival.time),
+        cost: json.cost,
+        isBooked: json.isBooked,
+        bookingToken: json.bookingToken,
+        tripId: params.id,
+        isReturn: false
+      }
     });
 
-    return NextResponse.json(flight);
+    // Create the return flight
+    const returnFlight = await prisma.flight.create({
+      data: {
+        airline: json.returnFlight.airline,
+        flightNumber: json.returnFlight.flightNumber,
+        departure: new Date(json.returnFlight.departure.time),
+        arrival: new Date(json.returnFlight.arrival.time),
+        cost: json.returnFlight.cost,
+        isBooked: json.returnFlight.isBooked,
+        bookingToken: json.returnFlight.bookingToken,
+        tripId: params.id,
+        isReturn: true,
+        outboundFlightId: outboundFlight.id
+      }
+    });
+
+    // Return both flights in an array
+    return NextResponse.json([
+      {
+        ...outboundFlight,
+        returnFlight: returnFlight
+      }
+    ]);
   } catch (error) {
-    console.error("Error saving flight:", error);
+    console.error("Error creating flight:", error);
     return NextResponse.json(
-      { error: "Failed to save flight", details: error instanceof Error ? error.message : "Unknown error" },
+      { error: "Failed to create flight", details: error instanceof Error ? error.message : "Unknown error" },
       { status: 500 }
     );
   }
 }
 
-// DELETE /api/trips/[id]/flights - Remove a flight from a trip
+// DELETE /api/trips/[id]/flights?flightId=xxx - Remove a flight from a trip
 export async function DELETE(
   request: Request,
   context: { params: { id: string } }
 ) {
+  const params = await context.params;
+  const session = await getServerSession(authOptions);
+  const { searchParams } = new URL(request.url);
+  const flightId = searchParams.get("flightId");
+
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  if (!flightId) {
+    return NextResponse.json(
+      { error: "Flight ID is required" },
+      { status: 400 }
+    );
+  }
+
   try {
-    const session = await getServerSession(authOptions);
-
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const tripId = context.params.id;
-    const { searchParams } = new URL(request.url);
-    const flightId = searchParams.get('flightId');
-
-    if (!flightId) {
-      return NextResponse.json({ error: "Flight ID is required" }, { status: 400 });
-    }
-
-    // Verify trip exists and belongs to user
-    const trip = await prisma.trip.findUnique({
-      where: {
-        id: tripId,
-        userId: session.user.id,
-      },
-      include: {
-        flights: {
-          where: {
-            id: flightId
-          }
-        }
-      }
-    });
-
-    if (!trip) {
-      return NextResponse.json({ error: "Trip not found" }, { status: 404 });
-    }
-
-    if (trip.flights.length === 0) {
-      return NextResponse.json({ error: "Flight not found" }, { status: 404 });
-    }
-
-    // Delete the flight
+    // Delete the flight (this will cascade delete the return flight)
     await prisma.flight.delete({
       where: {
-        id: flightId
-      }
+        id: flightId,
+      },
     });
 
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Error deleting flight:", error);
     return NextResponse.json(
-      { error: "Failed to delete flight", details: error instanceof Error ? error.message : "Unknown error" },
+      { error: "Failed to delete flight" },
       { status: 500 }
     );
   }

@@ -86,8 +86,17 @@ model Flight {
   departure    DateTime
   arrival      DateTime
   cost         Float?
+  isBooked     Boolean   @default(false)
+  bookingToken String?
   tripId       String
   trip         Trip      @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  
+  // Fields for flight pairing
+  isReturn     Boolean   @default(false)
+  // Self-referential relation for flight pairing
+  outboundFlightId String?   @unique
+  outboundFlight   Flight?   @relation("FlightPair", fields: [outboundFlightId], references: [id], onDelete: SetNull)
+  returnFlight     Flight?   @relation("FlightPair")
 }
 
 model Accommodation {

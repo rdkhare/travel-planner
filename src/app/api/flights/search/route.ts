@@ -17,7 +17,9 @@ interface SerpApiRequestParams {
   arrival_id: string;
   outbound_date: string;
   currency: string;
+  departure_token?: string;
   return_date?: string;
+  type?: string;
 }
 
 export async function POST(request: Request) {
@@ -28,7 +30,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const { originLocationCode, destinationLocationCode, departureDate, returnDate } = await request.json();
+    const { originLocationCode, destinationLocationCode, departureDate, departure_token, returnDate } = await request.json();
 
     // Extract IATA codes
     const originIata = extractIataCode(originLocationCode);
@@ -38,7 +40,8 @@ export async function POST(request: Request) {
       originIata,
       destinationIata,
       departureDate,
-      returnDate
+      returnDate,
+      departure_token
     });
 
     if (!originIata || !destinationIata || !departureDate) {
@@ -57,7 +60,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // Construct the request parameters exactly as per the example
+    // Construct the request parameters
     const requestParams: SerpApiRequestParams = {
       api_key: apiKey,
       engine: "google_flights",
@@ -66,12 +69,14 @@ export async function POST(request: Request) {
       departure_id: originIata,
       arrival_id: destinationIata,
       outbound_date: departureDate,
+      return_date: returnDate, // Always include return_date for round-trip
+      type: "1", // Always set to round-trip
       currency: "USD"
     };
 
-    // Add return_date only if it exists
-    if (returnDate) {
-      requestParams.return_date = returnDate;
+    // Only add departure_token for return flight searches
+    if (departure_token) {
+      requestParams.departure_token = departure_token;
     }
 
     console.log('Making SerpApi request with params:', JSON.stringify(requestParams, null, 2));
@@ -106,8 +111,14 @@ export async function POST(request: Request) {
       return NextResponse.json([]);
     }
 
-    console.log(`Found ${allFlights.length} flights`);
-    return NextResponse.json(allFlights);
+    // Add booking_token to each flight if available
+    const flightsWithBooking = allFlights.map(flight => ({
+      ...flight,
+      booking_token: data.booking_token
+    }));
+
+    console.log(`Found ${flightsWithBooking.length} flights`);
+    return NextResponse.json(flightsWithBooking);
 
   } catch (error: any) {
     console.error("Error searching flights:", error);
